@@ -5,35 +5,35 @@ mod db;
 mod schema;
 mod models;
 
-use actix_web::{get, web, App, HttpResponse, HttpServer, Responder};
+use axum::{response::Redirect, routing::get, Router};
 
 #[derive(Debug)]
 enum SolveError {
     UrlNotFound,
 }
 
-#[get("/{url_id}")]
-async fn redirect(path: web::Path<String>) -> impl Responder {
-    match solve_id(path.into_inner()).await {
-        Ok(url) => HttpResponse::Found().append_header(("location", url)).finish(),
-        Err(_) => HttpResponse::NotFound().finish(),
+#[tokio::main]
+async fn main() {
+    let app = Router::new().route("/r/:id", get(redirect_handler));
+
+    let listener = tokio::net::TcpListener::bind("127.0.0.1:3000").await.unwrap();
+    println!("Server listening on {}", listener.local_addr().unwrap());
+    axum::serve(listener, app).await.unwrap();
+}
+
+async fn redirect_handler(params: axum::extract::Path<String>) -> Redirect {
+    let id = params.to_string();
+
+    match solve_id(id).await {
+        Ok(url) => Redirect::temporary(&url),
+        // TODO: CHANGE THIS URL TO 404 PAGE
+        Err(_) => Redirect::temporary("https://http.cat/404"),
     }
 }
 
-async fn solve_id(url_id: String) -> Result<String, SolveError> {
-    if url_id == "ffff" {
+async fn solve_id(id: String) -> Result<String, SolveError> {
+    if id == "ffff" {
         return Ok("https://youtube.com".to_string())
     }
     Err(SolveError::UrlNotFound)
-}
-
-#[actix_web::main]
-async fn main() -> std::io::Result<()> {
-    HttpServer::new(|| {
-        App::new()
-            .service(redirect)
-    })
-    .bind(("127.0.0.1", 8080))?
-    .run()
-    .await
 }
