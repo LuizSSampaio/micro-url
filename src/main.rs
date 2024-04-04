@@ -5,7 +5,13 @@ mod db;
 mod schema;
 mod models;
 
-use axum::{response::Redirect, routing::get, Router};
+use axum::{http::StatusCode, response::Redirect, routing::{delete, get, post, put}, Router};
+use db::estabilish_connection;
+use diesel::{QueryDsl, RunQueryDsl};
+use models::NewShortLink;
+use serde::Deserialize;
+
+use crate::models::Link;
 
 #[derive(Debug)]
 enum SolveError {
@@ -14,7 +20,11 @@ enum SolveError {
 
 #[tokio::main]
 async fn main() {
-    let app = Router::new().route("/r/:id", get(redirect_handler));
+    let app = Router::new()
+        .route("/r/:id", get(redirect_handler))
+        .route("/api/create", post(create_link_handler))
+        .route("/api/edit", put(update_link_handler))
+        .route("/api/delete", delete(delete_link_handler));
 
     let listener = tokio::net::TcpListener::bind("127.0.0.1:3000").await.unwrap();
     println!("Server listening on {}", listener.local_addr().unwrap());
@@ -29,6 +39,70 @@ async fn redirect_handler(params: axum::extract::Path<String>) -> Redirect {
         // TODO: CHANGE THIS URL TO 404 PAGE
         Err(_) => Redirect::temporary("https://http.cat/404"),
     }
+}
+
+#[derive(Debug, Deserialize)]
+struct CreateLinkJson {
+    long_url: String,
+}
+
+#[derive(Debug, Deserialize)]
+struct UpdateLinkJson {
+    id: i32,
+    long_url: String,
+}
+
+#[derive(Debug, Deserialize)]
+struct DeleteLinkJson {
+    id: i32,
+}
+
+async fn create_link_handler(data: axum::extract::Json<CreateLinkJson>) -> StatusCode {
+    use crate::schema::links::dsl::*;
+
+    let mut connection = estabilish_connection();
+    let new_link = NewShortLink {
+        // TODO: Auto generate url_id
+        url_id: "avdg",
+        long_url: &data.long_url,
+    };
+
+    diesel::insert_into(links)
+        .values(&new_link)
+        .execute(&mut connection)
+        .expect("Error creating new link");
+
+    StatusCode::OK
+}
+
+async fn update_link_handler(data: axum::extract::Json<UpdateLinkJson>) -> StatusCode {
+    use crate::schema::links::dsl::*;
+
+    let mut connection = estabilish_connection();
+    let db_link = Link {
+        id: data.id,
+        // TODO: Get the url_id from the database
+        url_id: "ffaf".to_string(),
+        long_url: data.long_url.to_string(),
+    };
+
+    diesel::update(links.find(data.id))
+        .set(&db_link)
+        .execute(&mut connection)
+        .expect("Error updanting link");
+
+    StatusCode::OK
+}
+
+async fn delete_link_handler(data: axum::extract::Json<DeleteLinkJson>) -> StatusCode {
+    use crate::schema::links::dsl::*;
+
+    let mut connection = estabilish_connection();
+    diesel::delete(links.find(data.id))
+        .execute(&mut connection)
+        .expect("Error deleting link");
+
+    StatusCode::OK
 }
 
 async fn solve_id(id: String) -> Result<String, SolveError> {
