@@ -1,7 +1,9 @@
+use serde::{Serialize, Deserialize};
+
 use crate::schema::links;
 
-#[derive(Insertable)]
-#[table_name = "links"]
+#[derive(Insertable, Serialize, Deserialize)]
+#[diesel(table_name = links)]
 pub struct NewShortLink<'a> {
     pub url_id: &'a str,
     pub long_url: &'a str,

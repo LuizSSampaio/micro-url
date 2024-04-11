@@ -2,16 +2,23 @@
 extern crate diesel;
 
 mod db;
-mod schema;
 mod models;
+mod schema;
 
-use axum::{http::StatusCode, response::Redirect, routing::{delete, get, post, put}, Router};
+use axum::{
+    http::StatusCode,
+    response::Redirect,
+    routing::{delete, get, post, put},
+    Router,
+};
 use db::estabilish_connection;
-use diesel::{QueryDsl, RunQueryDsl};
+use diesel::{ExpressionMethods, QueryDsl, RunQueryDsl};
 use models::NewShortLink;
 use serde::Deserialize;
 
 use crate::models::Link;
+
+static URL_ID_MAX_CHARS: u8 = 7;
 
 #[derive(Debug)]
 enum SolveError {
@@ -26,7 +33,9 @@ async fn main() {
         .route("/api/edit", put(update_link_handler))
         .route("/api/delete", delete(delete_link_handler));
 
-    let listener = tokio::net::TcpListener::bind("127.0.0.1:3000").await.unwrap();
+    let listener = tokio::net::TcpListener::bind("127.0.0.1:3000")
+        .await
+        .unwrap();
     println!("Server listening on {}", listener.local_addr().unwrap());
     axum::serve(listener, app).await.unwrap();
 }
@@ -105,9 +114,22 @@ async fn delete_link_handler(data: axum::extract::Json<DeleteLinkJson>) -> Statu
     StatusCode::OK
 }
 
-async fn solve_id(id: String) -> Result<String, SolveError> {
-    if id == "ffff" {
-        return Ok("https://youtube.com".to_string())
+async fn generate_url_id() -> String {
+    "".to_string()
+}
+
+async fn solve_id(received_url_id: String) -> Result<String, SolveError> {
+    use crate::schema::links::dsl::*;
+
+    let mut connection = estabilish_connection();
+
+    let result = links
+        .filter(url_id.eq(received_url_id))
+        .select(long_url)
+        .first::<String>(&mut connection);
+
+    match result {
+        Ok(data) => Ok(data),
+        _ => Err(SolveError::UrlNotFound),
     }
-    Err(SolveError::UrlNotFound)
 }
