@@ -5,6 +5,8 @@ mod db;
 mod models;
 mod schema;
 
+use std::usize;
+
 use axum::{
     http::StatusCode,
     response::Redirect,
@@ -18,7 +20,7 @@ use serde::Deserialize;
 
 use crate::models::Link;
 
-static URL_ID_MAX_CHARS: u8 = 7;
+static URL_ID_MAX_CHARS: usize = 7;
 
 #[derive(Debug)]
 enum SolveError {
@@ -72,7 +74,7 @@ async fn create_link_handler(data: axum::extract::Json<CreateLinkJson>) -> Statu
     let mut connection = estabilish_connection();
     let new_link = NewShortLink {
         // TODO: Auto generate url_id
-        url_id: "avdg",
+        url_id: &generate_url_id().await,
         long_url: &data.long_url,
     };
 
@@ -114,8 +116,21 @@ async fn delete_link_handler(data: axum::extract::Json<DeleteLinkJson>) -> Statu
     StatusCode::OK
 }
 
+// FIX: Counter reset error(needed to save the counter for future)
 async fn generate_url_id() -> String {
-    "".to_string()
+    let mut counter: i64 = 100000000000;
+    let elements: Vec<char> = "0123456789abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ"
+        .chars()
+        .collect();
+    let mut string_buffer = String::new();
+    while counter != 0 {
+        string_buffer.insert(0, elements[(counter % 62) as usize]);
+        counter /= 62;
+    }
+    while string_buffer.len() != URL_ID_MAX_CHARS {
+        string_buffer.insert(0, '0');
+    }
+    string_buffer.to_string()
 }
 
 async fn solve_id(received_url_id: String) -> Result<String, SolveError> {
