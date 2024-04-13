@@ -116,9 +116,23 @@ async fn delete_link_handler(data: axum::extract::Json<DeleteLinkJson>) -> Statu
     StatusCode::OK
 }
 
-// FIX: Counter reset error(needed to save the counter for future)
+async fn get_counter() -> i64 {
+    use crate::schema::links::dsl::*;
+
+    let mut connection = estabilish_connection();
+    let last_counter = links
+        .order(id.desc())
+        .select(id)
+        .first::<i32>(&mut connection);
+
+    match last_counter {
+        Ok(last_counter) => (last_counter as i64) + 100000000000,
+        _ => 100000000000,
+    }
+}
+
 async fn generate_url_id() -> String {
-    let mut counter: i64 = 100000000000;
+    let mut counter: i64 = get_counter().await;
     let elements: Vec<char> = "0123456789abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ"
         .chars()
         .collect();
