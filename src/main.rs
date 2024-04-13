@@ -59,13 +59,13 @@ struct CreateLinkJson {
 
 #[derive(Debug, Deserialize)]
 struct UpdateLinkJson {
-    id: i32,
+    url_id: String,
     long_url: String,
 }
 
 #[derive(Debug, Deserialize)]
 struct DeleteLinkJson {
-    id: i32,
+    url_id: String,
 }
 
 async fn create_link_handler(data: axum::extract::Json<CreateLinkJson>) -> StatusCode {
@@ -90,30 +90,44 @@ async fn update_link_handler(data: axum::extract::Json<UpdateLinkJson>) -> Statu
     use crate::schema::links::dsl::*;
 
     let mut connection = estabilish_connection();
-    let db_link = Link {
-        id: data.id,
-        // TODO: Get the url_id from the database
-        url_id: "ffaf".to_string(),
-        long_url: data.long_url.to_string(),
-    };
 
-    diesel::update(links.find(data.id))
-        .set(&db_link)
-        .execute(&mut connection)
-        .expect("Error updanting link");
+    let link_to_update: Result<Link, _> =
+        links.filter(url_id.eq(&data.url_id)).first(&mut connection);
 
-    StatusCode::OK
+    match link_to_update {
+        Ok(mut db_link) => {
+            db_link.long_url = data.long_url.to_string();
+
+            diesel::update(links.find(db_link.id))
+                .set(&db_link)
+                .execute(&mut connection)
+                .expect("Error updating link");
+
+            StatusCode::OK
+        }
+        Err(_) => StatusCode::BAD_REQUEST,
+    }
 }
 
 async fn delete_link_handler(data: axum::extract::Json<DeleteLinkJson>) -> StatusCode {
     use crate::schema::links::dsl::*;
 
     let mut connection = estabilish_connection();
-    diesel::delete(links.find(data.id))
-        .execute(&mut connection)
-        .expect("Error deleting link");
 
-    StatusCode::OK
+    let link_to_delete: Result<Link, _> = links
+        .filter(url_id.eq(data.url_id.to_string()))
+        .first(&mut connection);
+
+    match link_to_delete {
+        Ok(link) => {
+            diesel::delete(links.find(link.id))
+                .execute(&mut connection)
+                .expect("Error deleting link");
+
+            StatusCode::OK
+        }
+        Err(_) => StatusCode::BAD_REQUEST,
+    }
 }
 
 async fn get_counter() -> i64 {
